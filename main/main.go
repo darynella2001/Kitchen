@@ -1,14 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"math/big"
-	"crypto/rand"
 	"net/http"
-	"os"
+	"sync"
 	"time"
 )
 //Foods struct which contains an array of foods
@@ -28,39 +26,63 @@ type Order struct {
 	Id         int    `json:"id"`
 	Items      []int  `json:"items"`
 	Priority   int    `json:"priority"`
-	MaxWait    int    `json:"maxWait"`
+	MaxWait    int    `json:"max-wait"`
+	PickUpTime int    `json:"pick-up-time"`
+}
+
+type PreparedOrder struct {
+	Id          int    `json:"id"`
+	Items       []int  `json:"items"`
+	Priority    int    `json:"priority"`
+	MaxWait     int    `json:"max-wait"`
+	PickUpTime  int    `json:"pick-up-time"`
+	CookingTime int    `json:"cooking-time"`
 }
 
 type FoodDetails struct{
 	FoodId int `json:"food_id"`
 	CookId int `json:"cook_id"`
 }
-func genRandNum(min, max int64) int64 {
-	// calculate the max we will be using
-	bg := big.NewInt(max - min)
+func getUnixTimestamp() int64 {
+	now := time.Now()
+	sec := now.Unix()
+	return sec
+}
 
-	n, err := rand.Int(rand.Reader, bg)
+func getJsonRequest(order Order) []byte {
+	preparedOrder := &PreparedOrder{
+		Id:          order.Id,
+		Items:       order.Items,
+		Priority:    order.Priority,
+		MaxWait:     order.MaxWait,
+		PickUpTime:  order.PickUpTime,
+		CookingTime: (int(getUnixTimestamp())- order.PickUpTime)}
+	ord, err := json.Marshal(preparedOrder)
+	if err != nil {
+		fmt.Printf("Error: %s", err)
+	}
+	return ord
+}
+
+func makeRequest(ord []byte) {
+	req, err := http.NewRequest("POST", "http://localhost:8080/dininghall", bytes.NewBuffer(ord))
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		panic(err)
 	}
+	defer resp.Body.Close()
+	fmt.Println(string(ord))
+	fmt.Println("Request sent")
 
-	// add n to min to support the passed in range
-	return n.Int64() + min
-}
-func processOrder(order Order){
-	// some code
-
-	// sleep for 3-10 seconds
-	preparation_time := int(genRandNum(1,7)) + 3
-	time.Sleep(time.Duration(preparation_time) * time.Second)
-
-	// finished
-	cookOrder(order, preparation_time)
 }
 
-func cookOrder(order Order, prepatationTime int){
-	//some code
+func waiter(order Order){
+	request := getJsonRequest(order)
+	time.Sleep(time.Second)
+	makeRequest(request)
 }
+
 
 func servePage(rw http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
@@ -70,32 +92,23 @@ func servePage(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Print(time.Now().Clock())
-	fmt.Printf(": Cooking order number: %d\n", order.Id)
-	go processOrder(order)
+	log.Println(order)
+	fmt.Println("Request Handled")
+
+	var wg sync.WaitGroup
+	for i:=1; i <= 100; i++{
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+			waiter(order)
+		}()
+	}
+	wg.Wait()
 }
 
 
 func main() {
-	jsonFile, err := os.Open("foods.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	//fmt.Println("Successfully opened food.json")
-	defer jsonFile.Close()
-
-	//read our opened jsonFile as a byte array
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-
-	//we initialize our Foods array
-	var foods Foods
-
-	//we unmarshal our byteArray which contains our
-	//jsonFile's content info 'foods' which we defined above
-
-	json.Unmarshal(byteValue, &foods)
-
-
 	http.HandleFunc("/kitchen", servePage)
 	log.Fatal(http.ListenAndServe(":8081", nil))
 
