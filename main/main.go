@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -38,7 +40,17 @@ type PreparedOrder struct {
 	PickUpTime  int    `json:"pick-up-time"`
 	CookingTime int    `json:"cooking-time"`
 }
+//Foods struct which contains an array of foods
+type Cooks struct {
+	Cooks []Cook `json:"cooks"`
+}
 
+type Cook struct{
+	Rank          int     `json:"rank"`
+	Proficiency   int     `json:"proficiency"`
+	Name          string  `json:"name"`
+	CatchPhrase   string  `json:"catch-phrase"`
+}
 type FoodDetails struct{
 	FoodId int `json:"food_id"`
 	CookId int `json:"cook_id"`
@@ -107,8 +119,40 @@ func servePage(rw http.ResponseWriter, req *http.Request) {
 	wg.Wait()
 }
 
-
 func main() {
+	cooksFile, err := os.Open("../cooks.json")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer cooksFile.Close()
+
+	//read our opened cooksFile as a byte array
+	byteValue, _ := ioutil.ReadAll(cooksFile)
+
+	//we initialize our Foods array
+	var cooks Cooks
+
+	//we unmarshal our byteArray which contains our
+	//cooksFile's content info 'cooks' which we defined above
+	json.Unmarshal(byteValue, &cooks)
+
+
+	foodFile, err := os.Open("../foods.json")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer foodFile.Close()
+
+	//read our opened foodFile as a byte array
+	byteValue2, _ := ioutil.ReadAll(foodFile)
+
+	//we initialize our Foods array
+	var foods Foods
+
+	//we unmarshal our byteArray which contains our
+	//foodFile's content info 'foods' which we defined above
+	json.Unmarshal(byteValue2, &foods)
+
 	http.HandleFunc("/kitchen", servePage)
 	log.Fatal(http.ListenAndServe(":8081", nil))
 
