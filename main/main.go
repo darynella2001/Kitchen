@@ -120,7 +120,7 @@ func servePage(rw http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	cooksFile, err := os.Open("../cooks.json")
+	cooksFile, err := os.Open("../config/cooks.json")
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -137,7 +137,7 @@ func main() {
 	json.Unmarshal(byteValue, &cooks)
 
 
-	foodFile, err := os.Open("../foods.json")
+	foodFile, err := os.Open("../config/foods.json")
 	if err != nil {
 		fmt.Println(err)
 	}
